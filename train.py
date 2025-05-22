@@ -24,7 +24,7 @@ from datasets import load_dataset, concatenate_datasets
 # Load model directly
 from transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-70b-hf", token='...')
+tokenizer = AutoTokenizer.from_pretrained("openai-community/gpt2", token='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')
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 #liger kernels
@@ -44,7 +44,7 @@ class ModelArgs:
     no_of_heads = 8 #IMP needs to be thoroughly calculated
     dropout = 0.1
     epochs = 3
-    max_lr = 2.5e-4
+    max_lr = 6e-4
     no_of_decoder_layers = 8 #IMP needs to be thoroughly calculated
     weight_decay_optim = 0.1
     beta_1 = 0.9
@@ -52,7 +52,7 @@ class ModelArgs:
     device = 'cuda:5'
     no_kv_heads = 2
     scaling_factor = 0.5
-    vocab_size = len(tokenizer.get_vocab()) + 768
+    vocab_size = 50258
     local_block_size = 256
     base_freq=10000
     clip = 1.0
@@ -564,7 +564,8 @@ class Gemma(nn.Module):
                 index += ModelArgs.local_block_size
             
             no_of_layers += 1
-            
+        
+        x = (2*(ModelArgs.no_of_decoder_layers) ** -0.5) * x
         x = self.norm(x)
         
         # Handle different modes (inference vs training) and loss types
@@ -650,6 +651,9 @@ def find_unused_parameters(model):
             unused.append(name)
     return unused
 
+torch.set_float32_matmul_precision('high')
+
+
 
 # import tqdm 
 def train():
@@ -668,9 +672,11 @@ def train():
                   vocab_size=ModelArgs.vocab_size, dropout=ModelArgs.dropout, device=device)
     model = model.to(device)
 
+    model = torch.compile(model)
+    
     print("Model loaded")
     # Setup optimizer
-    optimizer = torch.optim.AdamW(params=model.parameters(), lr=ModelArgs.max_lr)
+    optimizer = torch.optim.AdamW(params=model.parameters(), lr=ModelArgs.max_lr, betas = (ModelArgs.beta_1, ModelArgs.beta_2), weight_decay=ModelArgs.weight_decay_optim, eps=ModelArgs.eps)
     
     # Training parameters
     # save_checkpoint_iter = 2000
